@@ -27,6 +27,7 @@ func NewClient(apiKey string) (*ObsGenClient, error) {
 	table := parts[2]
 
 	endpoint := fmt.Sprintf("https://api.airtable.com/v0/%s/%s", baseID, table)
+
 	client := &http.Client{}
 
 	return &ObsGenClient{
@@ -38,36 +39,50 @@ func NewClient(apiKey string) (*ObsGenClient, error) {
 	}, nil
 }
 
-func (c *ObsGenClient) LogEvent(data map[string]interface{}) error {
-	requestBody := map[string]interface{}{
-		"records": []map[string]interface{}{
-			{"fields": data},
-		},
-	}
+func (c *ObsGenClient) LogEvent(data map[string]interface{}) <-chan error {
+	errors := make(chan error)
 
-	requestJSON, err := json.Marshal(requestBody)
-	if err != nil {
-		return err
-	}
+	go func() {
+		requestBody := map[string]interface{}{
+			"records": []map[string]interface{}{
+				{"fields": data},
+			},
+		}
 
-	request, err := http.NewRequest("POST", c.endpoint, bytes.NewBuffer(requestJSON))
-	if err != nil {
-		return err
-	}
+		requestJSON, err := json.Marshal(requestBody)
+		if err != nil {
+			errors <- err
+			<-errors
+			return
+		}
 
-	request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
-	request.Header.Set("Content-Type", "application/json")
+		request, err := http.NewRequest("POST", c.endpoint, bytes.NewBuffer(requestJSON))
+		if err != nil {
+			errors <- err
+			<-errors
+			return
+		}
 
-	response, err := c.client.Do(request)
-	if err != nil {
-		return err
-	}
+		request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+		request.Header.Set("Content-Type", "application/json")
 
-	defer response.Body.Close()
+		response, err := c.client.Do(request)
+		if err != nil {
+			errors <- err
+			<-errors
+			return
+		}
 
-	if response.StatusCode < 200 || response.StatusCode > 299 {
-		return fmt.Errorf("unexpected response status code: %d", response.StatusCode)
-	}
+		defer response.Body.Close()
 
-	return nil
+		if response.StatusCode < 200 || response.StatusCode > 299 {
+			errors <- fmt.Errorf("unexpected response status code: %d", response.StatusCode)
+			<-errors
+			return
+		}
+
+		errors <- nil
+	}()
+
+	return errors
 }

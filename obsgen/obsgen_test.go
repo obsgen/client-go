@@ -72,9 +72,11 @@ func TestLogEvent(t *testing.T) {
 	}
 
 	// call the LogEvent method with test data
-	err := client.LogEvent(map[string]interface{}{
+	c := client.LogEvent(map[string]interface{}{
 		"foo": "bar",
 	})
+
+	err := <-c
 
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
