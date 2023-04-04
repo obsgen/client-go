@@ -48,18 +48,17 @@ func (c *ObsGenClient) LogEvent(data map[string]interface{}) <-chan error {
 				{"fields": data},
 			},
 		}
+		defer close(errors)
 
 		requestJSON, err := json.Marshal(requestBody)
 		if err != nil {
 			errors <- err
-			<-errors
 			return
 		}
 
 		request, err := http.NewRequest("POST", c.endpoint, bytes.NewBuffer(requestJSON))
 		if err != nil {
 			errors <- err
-			<-errors
 			return
 		}
 
@@ -69,7 +68,6 @@ func (c *ObsGenClient) LogEvent(data map[string]interface{}) <-chan error {
 		response, err := c.client.Do(request)
 		if err != nil {
 			errors <- err
-			<-errors
 			return
 		}
 
@@ -77,11 +75,9 @@ func (c *ObsGenClient) LogEvent(data map[string]interface{}) <-chan error {
 
 		if response.StatusCode < 200 || response.StatusCode > 299 {
 			errors <- fmt.Errorf("unexpected response status code: %d", response.StatusCode)
-			<-errors
 			return
 		}
 
-		errors <- nil
 	}()
 
 	return errors
